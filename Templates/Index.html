@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MapsPeople Customer Service Chatbot</title>
+    <title>Airport Map Scraper</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
@@ -13,6 +13,7 @@
     <div class="chat-container">
         <div class="header">
             <h1>At your Service</h1>
+            <span id="settings-link" class="settings-link" title="Settings">⚙</span>
         </div>
         <div class="chat-box" id="chat-box">
             <div class="message bot">Hello! I can help you with troubleshooting MapsPeople SDK. What is your query?</div>
@@ -24,6 +25,20 @@
         <div class="button-container">
             <button id="live-support-btn">Talk to an Agent</button>
             <button id="email-response-btn">Create Ticket</button>
+        </div>
+        <div class="scrape-container">
+            <input type="text" id="map-link" placeholder="Airport map URL">
+            <button id="scrape-btn" title="Scrape">🔍</button>
+            <button id="recheck-btn" style="display:none" title="Recheck">♻</button>
+        </div>
+        <div id="geojson-list"></div>
+    </div>
+
+    <div id="settings-modal">
+        <div class="modal-content">
+            <label for="api-key">ChatGPT API Key:</label>
+            <input type="text" id="api-key" placeholder="sk-...">
+            <button id="save-key">Save</button>
         </div>
     </div>
 
@@ -81,6 +96,54 @@
             messageDiv.innerText = message;
             document.getElementById('chat-box').appendChild(messageDiv);
             document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
+        }
+
+        // Settings modal logic
+        document.getElementById('settings-link').addEventListener('click', function() {
+            document.getElementById('settings-modal').style.display = 'flex';
+        });
+        document.getElementById('save-key').addEventListener('click', function() {
+            const key = document.getElementById('api-key').value;
+            localStorage.setItem('api_key', key);
+            document.getElementById('settings-modal').style.display = 'none';
+        });
+
+        // Scrape functionality
+        document.getElementById('scrape-btn').addEventListener('click', runScrape);
+        document.getElementById('recheck-btn').addEventListener('click', recheck);
+
+        function runScrape() {
+            const url = document.getElementById('map-link').value;
+            if (!url) return;
+            const apiKey = localStorage.getItem('api_key') || '';
+            fetch('/scrape', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({url: url, api_key: apiKey})
+            }).then(r => r.json()).then(data => {
+                if (!data.success) {
+                    alert('No GeoJSON files found. Please use the chat for assistance.');
+                    return;
+                }
+                document.getElementById('geojson-list').innerHTML = data.files.map(f => `<div>${f.description || 'GeoJSON'}: <a href="${f.url}" target="_blank">${f.url}</a></div>`).join('');
+                alert(`Web Scraping Successful - Created ${data.files.length} geojson files`);
+                document.getElementById('recheck-btn').style.display = 'inline-block';
+            });
+        }
+
+        function recheck() {
+            const url = document.getElementById('map-link').value;
+            const apiKey = localStorage.getItem('api_key') || '';
+            const files = Array.from(document.querySelectorAll('#geojson-list a')).map(a => ({url: a.href}));
+            fetch('/recheck', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({url: url, files: files, api_key: apiKey})
+            }).then(r => r.json()).then(data => {
+                alert(data.critique);
+            });
         }
     </script>
 </body>
